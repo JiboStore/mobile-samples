@@ -1,7 +1,5 @@
 ﻿using System;
-using System.IO;
 using System.Linq;
-using System.Reflection;
 
 using NUnit.Framework;
 
@@ -10,67 +8,36 @@ using Xamarin.UITest.Queries;
 
 namespace CreditCardValidation.Tests
 {
+    public enum Platform
+    {
+        Android,
+        iOS
+    }
+
     [TestFixture]
-    public class ValidateCreditCardTestsDave
+    public class ValidateCreditCardTests
     {
         /// <summary>
-        /// This variable determine if the tests will run on iOS or Android.
-        /// </summary>
-        public static readonly bool LocalTestsUsingiOS = true;
-        /// <summary>
-        /// In some cases UITest will not be able to resolve the path to the Android SDK. 
-        /// Set this to your local Android SDK path.
+        ///   In some cases UITest will not be able to resolve the path to the Android SDK.
+        ///   Set this to your local Android SDK path.
         /// </summary>
         public static readonly string PathToAndroidSdk = "/Users/tom/android-sdk-macosx";
+        IApp _app;
+        /// <summary>
+        ///   This holds the AppQueries that will be used in the test.
+        /// </summary>
+        IScreenQueries _queries;
+        public string PathToIPA { get; private set; }
+        public string PathToAPK { get; private set; }
 
         [SetUp]
         public void SetUp()
         {
-            if (TestEnvironment.Platform.Equals(TestPlatform.TestCloudiOS))
-            {
-                _app = ConfigureApp
-                    .iOS
-                    .StartApp();
-                _queries = new iOSQueries();
-            }
-            else if (TestEnvironment.Platform.Equals(TestPlatform.TestCloudAndroid))
-            {
-                _queries = new AndroidQueries();
-                _app = ConfigureApp
-                    .Android
-                    .StartApp();
-            }
-            else if (TestEnvironment.Platform.Equals(TestPlatform.Local))
-            {
-                if (LocalTestsUsingiOS)
-                {
-                    ConfigureiOSApp();
-                }
-                else
-                {
-                    ConfigureAndroidApp();
-                }
-            }
-            else
-            {
-                throw new NotImplementedException(String.Format("I don't know this platform {0}", TestEnvironment.Platform));
-            }
         }
 
         /// <summary>
-        /// This holds the AppQueries that will be used in the test.
-        /// </summary>
-        IScreenQueries _queries;
-
-        IApp _app;
-
-        public string PathToIPA { get; private set; }
-
-        public string PathToAPK { get; private set; }
-
-        /// <summary>
-        /// Before each test is run we calculate the path to the AppBundle and 
-        /// the APK.
+        ///   Before each test is run we calculate the path to the AppBundle and
+        ///   the APK.
         /// </summary>
         [TestFixtureSetUp]
         public void TestFixtureSetup()
@@ -83,16 +50,16 @@ namespace CreditCardValidation.Tests
             else
             {
                 PathToIPA = "../../../CreditCardValidation.iOS/bin/iPhoneSimulator/Debug/CreditCardValidationiOS.app";
-                PathToAPK = "../../../CreditCardValidation.Droid/bin/iPhoneSimulator/Release/CreditCardValidation.Droid.APK";
+                PathToAPK = "../../../CreditCardValidation.Droid/bin/Debug/CreditCardValidation.Droid.APK";
             }
         }
 
-
-        [Test]
-        public void CreditCardNumber_CorrectSize_DisplaySuccessScreen()
+        [TestCase(Platform.iOS)]
+        [TestCase(Platform.Android)]
+        public void CreditCardNumber_CorrectSize_DisplaySuccessScreen(Platform platform)
         {
             // Arrange - set up our queries for the views
-            // Nothing to do here - the queries are already defined.
+            ConfigureTestFor(platform);
 
             /* Act */
             _app.EnterText(_queries.CreditCardNumberView, new string('9', 16));
@@ -107,11 +74,12 @@ namespace CreditCardValidation.Tests
             Assert.IsTrue(results.Any(), "The success message was not displayed on the screen");
         }
 
-        [Test]
-        public void CreditCardNumber_IsBlank_DisplayErrorMessage()
+        [TestCase(Platform.iOS)]
+        [TestCase(Platform.Android)]
+        public void CreditCardNumber_IsBlank_DisplayErrorMessage(Platform platform)
         {
             // Arrange - set up our queries for the views
-            // Nothing to do here - the queries are already defined.
+            ConfigureTestFor(platform);
 
             /* Act */
             _app.EnterText(_queries.CreditCardNumberView, String.Empty);
@@ -122,14 +90,14 @@ namespace CreditCardValidation.Tests
             AppResult[] result = _app.Query(_queries.MissingCreditCardNumberView);
             _app.Screenshot("Error message for a missing credit card number.");
             Assert.IsTrue(result.Any(), "The 'missing credit card' error message is not displayed.");
-
         }
 
-        [Test]
-        public void CreditCardNumber_TooLong_DisplayErrorMessage()
+        [TestCase(Platform.iOS)]
+        [TestCase(Platform.Android)]
+        public void CreditCardNumber_TooLong_DisplayErrorMessage(Platform platform)
         {
-            /* Arrange - set up our queries for the views */
-            // Nothing to do here - the queries are already defined.
+            // Arrange - set up our queries for the views
+            ConfigureTestFor(platform);
 
             /* Act */
             _app.EnterText(_queries.CreditCardNumberView, new string('9', 17));
@@ -142,11 +110,12 @@ namespace CreditCardValidation.Tests
             Assert.IsTrue(result.Any(), "The 'long credit card' error message is not being displayed.");
         }
 
-        [Test]
-        public void CreditCardNumber_TooShort_DisplayErrorMessage()
+        [TestCase(Platform.iOS)]
+        [TestCase(Platform.Android)]
+        public void CreditCardNumber_TooShort_DisplayErrorMessage(Platform platform)
         {
-            /* Arrange - set up our queries for the views */
-            // Nothing to do here - the queries are already defined.
+            // Arrange - set up our queries for the views
+            ConfigureTestFor(platform);
 
             /* Act */
             _app.EnterText(_queries.CreditCardNumberView, new string('9', 15));
@@ -161,10 +130,10 @@ namespace CreditCardValidation.Tests
 
         /// <summary>
         ///   This method checks to make sure that UITest can find the Android SDK if it is not in
-        ///   a standard location. 
+        ///   a standard location.
         /// </summary>
         /// <remarks>
-        /// This method is only used if the PathToAndroidSDK is set.
+        ///   This method is only used if the PathToAndroidSDK is set.
         /// </remarks>
         void CheckAndroidHomeEnvironmentVariable()
         {
@@ -180,30 +149,63 @@ namespace CreditCardValidation.Tests
         }
 
         /// <summary>
-        /// This will initialize the IApp to the Android application.
+        ///   This will initialize the IApp to the Android application.
         /// </summary>
         void ConfigureAndroidApp()
         {
             CheckAndroidHomeEnvironmentVariable();
             _queries = new AndroidQueries();
 
-            _app = ConfigureApp.Android
-                .ApkFile(PathToAPK)
-                .EnableLocalScreenshots()
-                .StartApp();
+            if (TestEnvironment.Platform.Equals(TestPlatform.Local))
+            {
+                _app = ConfigureApp.Android
+                                   .ApkFile(PathToAPK)
+                                   .EnableLocalScreenshots()
+                                   .StartApp();
+            }
+            else
+            {
+                _app = ConfigureApp
+                    .Android
+                    .StartApp();
+            }
         }
 
         /// <summary>
-        /// This will initialize IApp to the iOS application.
+        ///   This will initialize IApp to the iOS application.
         /// </summary>
         void ConfigureiOSApp()
         {
             _queries = new iOSQueries();
 
-            _app = ConfigureApp.iOS
-                .EnableLocalScreenshots()
-                .AppBundle(PathToIPA)
-                .StartApp();
+            if (TestEnvironment.Platform.Equals(TestPlatform.Local))
+            {
+                _app = ConfigureApp.iOS
+                                   .EnableLocalScreenshots()
+                                   .AppBundle(PathToIPA)
+                                   .StartApp();
+            }
+            else
+            {
+                _app = ConfigureApp
+                    .iOS
+                    .StartApp();
+            }
+        }
+
+        void ConfigureTestFor(Platform platform)
+        {
+            switch (platform)
+            {
+                case Platform.Android:
+                    _queries = new AndroidQueries();
+                    ConfigureAndroidApp();
+                    break;
+                case Platform.iOS:
+                    _queries = new iOSQueries();
+                    ConfigureiOSApp();
+                    break;
+            }
         }
     }
 }
